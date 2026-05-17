@@ -454,7 +454,23 @@ textarea{resize:none;min-height:60px}
 #forn-test-box .ok-val{color:var(--gr)}
 #forn-test-box .err-val{color:var(--re)}
 
-/* ══ AI ASSISTANT ══ */
+/* ══ FIXO REFS ══ */
+.fixo-row{display:grid;grid-template-columns:1fr 90px 32px;gap:6px;align-items:center;margin-bottom:7px}
+.fixo-row input{margin-bottom:0;padding:9px 10px;font-size:.82rem}
+.fixo-row .del-btn{background:none;border:1px solid rgba(255,51,85,.3);border-radius:6px;
+  color:var(--re);cursor:pointer;height:38px;font-size:.8rem;display:flex;align-items:center;justify-content:center;
+  transition:background .15s}
+.fixo-row .del-btn:active{background:rgba(255,51,85,.15)}
+
+/* Quick-pick fixo na tela de contagem */
+.fixo-pick-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.fixo-pick-btn{background:var(--s2);border:1px solid rgba(0,245,160,.25);border-radius:10px;
+  padding:11px 10px;cursor:pointer;text-align:left;transition:border-color .15s,background .12s}
+.fixo-pick-btn:active{background:var(--s3);border-color:var(--gr)}
+.fixo-pick-ref{font-family:var(--R);font-weight:700;font-size:.88rem;color:var(--tx);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px}
+.fixo-pick-qty{font-family:var(--R);font-weight:700;font-size:1.15rem;color:var(--gr)}
+.fixo-pick-lbl{font-size:.48rem;color:var(--mu2);letter-spacing:.5px;text-transform:uppercase;margin-top:1px}
 .ai-panel{background:linear-gradient(135deg,rgba(0,216,255,.04) 0%,rgba(0,245,160,.03) 100%);
   border:1px solid rgba(0,216,255,.22);border-radius:12px;padding:14px;margin-bottom:10px;
   position:relative;overflow:hidden}
@@ -847,6 +863,15 @@ textarea{resize:none;min-height:60px}
       </div>
     </div>
 
+    <!-- Referências Fixas (aparece se fornecedor da sessão tem tipo=fixo) -->
+    <div class="card" id="card-fixo" style="display:none">
+      <div class="ctit">
+        ⚡ Referências Fixas
+        <span id="fixo-forn-tag" style="color:var(--gr);font-size:.7rem"></span>
+      </div>
+      <div class="fixo-pick-grid" id="fixo-pick-grid"></div>
+    </div>
+
     <!-- Entrada manual -->
     <div class="card" id="card-manual" style="display:none">
       <div class="ctit">Entrada Manual</div>
@@ -1083,6 +1108,7 @@ textarea{resize:none;min-height:60px}
           <option value="kv">Chave-Valor  REF=x;QTD=10</option>
           <option value="json">JSON  {"ref":"x","qty":10}</option>
           <option value="posicional">Posicional (extrair por posição fixa)</option>
+          <option value="fixo">Referências Fixas (qtd pré-definida)</option>
         </select>
       </div>
 
@@ -1167,6 +1193,21 @@ textarea{resize:none;min-height:60px}
           </div>
           <label>Dividir Qtd por</label>
           <input id="fn-pos-div" type="number" value="1" min="1">
+        </div>
+      </div>
+
+      <!-- Seção Fixo -->
+      <div class="card" id="fs-fixo" style="display:none">
+        <div class="ctit">
+          Referências Fixas
+          <button onclick="fixoAddRow('fn-fixo-list')" style="background:none;border:none;color:var(--cy);
+            font-family:var(--R);font-weight:700;font-size:.7rem;cursor:pointer;letter-spacing:1px">+ Adicionar</button>
+        </div>
+        <div class="ibox" style="margin-bottom:10px">
+          Cadastre referências com quantidade padrão. Na tela de contagem aparecerá um botão rápido para cada uma.
+        </div>
+        <div id="fn-fixo-list">
+          <!-- linhas inseridas dinamicamente -->
         </div>
       </div>
 
@@ -1363,6 +1404,7 @@ textarea{resize:none;min-height:60px}
       <option value="kv">Chave-Valor  REF=x;QTD=10</option>
       <option value="json">JSON  {"ref":"x","qty":10}</option>
       <option value="posicional">Posicional (extrair por posição fixa)</option>
+      <option value="fixo">Referências Fixas (qtd pré-definida)</option>
     </select>
 
     <!-- Seção Regex -->
@@ -1426,6 +1468,20 @@ textarea{resize:none;min-height:60px}
       </div>
       <label>Dividir Qtd por</label>
       <input id="mfe-pos-div" type="number" value="1" min="1">
+    </div>
+
+    <!-- Seção Fixo -->
+    <div id="mfe-fs-fixo" style="display:none">
+      <div style="font-size:.56rem;color:var(--mu2);letter-spacing:.5px;margin-bottom:8px;line-height:1.7;
+        padding:8px 10px;background:rgba(0,216,255,.04);border:1px solid rgba(0,216,255,.12);border-radius:6px">
+        Cadastre referências com quantidade padrão. Na tela de contagem aparecerá um botão rápido para cada uma.
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <span style="font-size:.6rem;color:var(--mu2);letter-spacing:1px;text-transform:uppercase">Referências</span>
+        <button onclick="fixoAddRow('mfe-fixo-list')" style="background:none;border:none;color:var(--cy);
+          font-family:var(--R);font-weight:700;font-size:.7rem;cursor:pointer;letter-spacing:1px">+ Adicionar</button>
+      </div>
+      <div id="mfe-fixo-list"></div>
     </div>
 
     <!-- Testar parser -->
@@ -1660,11 +1716,60 @@ function fornTabShow(tab){
 /* ── Tipo de parser ── */
 function fornTipoChange(){
   const tipo = document.getElementById('fn-tipo').value;
-  ['regex','pipe','kv','posicional'].forEach(t=>{
+  ['regex','pipe','kv','posicional','fixo'].forEach(t=>{
     document.getElementById('fs-'+t).style.display = tipo===t?'block':'none';
   });
   document.getElementById('forn-test-box').className='';
   document.getElementById('forn-test-box').style.display='none';
+  // Seed primeira linha se vazio
+  if(tipo==='fixo'){
+    const list = document.getElementById('fn-fixo-list');
+    if(!list.children.length) fixoAddRow('fn-fixo-list');
+  }
+}
+
+/* ── Adicionar linha de referência fixa ── */
+function fixoAddRow(containerId, ref='', qty=''){
+  const container = document.getElementById(containerId);
+  if(!container) return;
+  const row = document.createElement('div');
+  row.className = 'fixo-row';
+  row.innerHTML = `
+    <input type="text" placeholder="Referência ex: 4700991V000" value="${h_(ref)}"
+      autocomplete="off" autocorrect="off" autocapitalize="characters"
+      style="font-size:.78rem;padding:9px 10px;margin-bottom:0">
+    <input type="number" placeholder="Qtd" value="${qty ? qty : ''}" min="1"
+      style="font-size:.82rem;padding:9px 8px;margin-bottom:0;text-align:center">
+    <button class="del-btn" onclick="this.parentElement.remove()" title="Remover">✕</button>
+  `;
+  container.appendChild(row);
+  row.querySelector('input').focus();
+}
+
+/* ── Ler linhas de fixo de um container ── */
+function fixoReadRows(containerId){
+  const container = document.getElementById(containerId);
+  if(!container) return [];
+  const rows = [];
+  container.querySelectorAll('.fixo-row').forEach(row=>{
+    const inputs = row.querySelectorAll('input');
+    const ref = (inputs[0]?.value||'').trim().toUpperCase();
+    const qty = parseInt(inputs[1]?.value)||0;
+    if(ref && qty > 0) rows.push({ref, qty});
+  });
+  return rows;
+}
+
+/* ── Preencher container fixo com dados salvos ── */
+function fixoFillRows(containerId, items=[]){
+  const container = document.getElementById(containerId);
+  if(!container) return;
+  container.innerHTML = '';
+  if(items.length){
+    items.forEach(it => fixoAddRow(containerId, it.ref, it.qty));
+  } else {
+    fixoAddRow(containerId);
+  }
 }
 
 function fornFormReset(){
@@ -1728,6 +1833,10 @@ function fornSave(){
     cfg.posQtyS = parseInt(document.getElementById('fn-pos-qty-s').value)||12;
     cfg.posQtyE = parseInt(document.getElementById('fn-pos-qty-e').value)||17;
     cfg.posDiv  = Math.max(1, parseInt(document.getElementById('fn-pos-div').value)||1);
+  } else if(tipo==='fixo'){
+    const refs = fixoReadRows('fn-fixo-list');
+    if(!refs.length){ toast('Adicione ao menos uma referência fixa',true); return; }
+    cfg.fixoRefs = refs;
   }
   // json e generico não têm parâmetros extras
 
@@ -1897,6 +2006,11 @@ function _fornSummary(f){
   if(f.tipo==='pipe')  return `Separador <b>${h_(f.pipeSep)}</b> · Ref[${f.pipeRef}] · Qtd[${f.pipeQty}]`;
   if(f.tipo==='kv')    return `${h_(f.kvRef)}${h_(f.kvEq)}valor${h_(f.kvSep)}${h_(f.kvQty)}${h_(f.kvEq)}número`;
   if(f.tipo==='posicional') return `Ref pos ${f.posRefS}:${f.posRefE} · Qtd pos ${f.posQtyS}:${f.posQtyE}`;
+  if(f.tipo==='fixo'){
+    const refs = (f.fixoRefs||[]);
+    return `${refs.length} referência${refs.length!==1?'s':''} fixa${refs.length!==1?'s':''}: `+
+      refs.slice(0,3).map(r=>`<b>${h_(r.ref)}</b> (${r.qty} pç)`).join(', ')+(refs.length>3?'…':'');
+  }
   return 'Formatos automáticos: JSON, Pipe, Chave-Valor, texto livre';
 }
 
@@ -1905,10 +2019,14 @@ let _fornEditNome = null;
 
 function mfeTypeChange(){
   const tipo = document.getElementById('mfe-tipo').value;
-  ['regex','pipe','kv','posicional'].forEach(t=>{
+  ['regex','pipe','kv','posicional','fixo'].forEach(t=>{
     const el = document.getElementById('mfe-fs-'+t);
     if(el) el.style.display = tipo===t ? 'block' : 'none';
   });
+  if(tipo==='fixo'){
+    const list = document.getElementById('mfe-fixo-list');
+    if(list && !list.children.length) fixoAddRow('mfe-fixo-list');
+  }
   // limpar resultado de teste ao mudar tipo
   const tb = document.getElementById('mfe-test-box');
   if(tb){ tb.style.display='none'; tb.className=''; }
@@ -1946,6 +2064,8 @@ function fornEditOpen(nome){
     document.getElementById('mfe-pos-qty-s').value = f.posQtyS ?? 12;
     document.getElementById('mfe-pos-qty-e').value = f.posQtyE ?? 17;
     document.getElementById('mfe-pos-div').value   = f.posDiv  || 1;
+  } else if(f.tipo==='fixo'){
+    fixoFillRows('mfe-fixo-list', f.fixoRefs || []);
   }
 
   // Limpar campo de teste
@@ -2050,6 +2170,10 @@ function fornEditSave(){
     cfg.posQtyS = parseInt(document.getElementById('mfe-pos-qty-s').value)||12;
     cfg.posQtyE = parseInt(document.getElementById('mfe-pos-qty-e').value)||17;
     cfg.posDiv  = Math.max(1, parseInt(document.getElementById('mfe-pos-div').value)||1);
+  } else if(tipo==='fixo'){
+    const refs = fixoReadRows('mfe-fixo-list');
+    if(!refs.length){ toast('Adicione ao menos uma referência fixa',true); return; }
+    cfg.fixoRefs = refs;
   }
 
   const arr = fornLoad();
@@ -2090,6 +2214,46 @@ function _applyFornBadges(forn){
   }
   // Popular o select de fornecedor OCR
   _populateOcrFornSelect(forn);
+  // Card de referências fixas
+  _renderFixoCard(customCfg);
+}
+
+function _renderFixoCard(cfg){
+  const card = document.getElementById('card-fixo');
+  const grid = document.getElementById('fixo-pick-grid');
+  const tag  = document.getElementById('fixo-forn-tag');
+  if(!card || !grid) return;
+  if(cfg && cfg.tipo==='fixo' && cfg.fixoRefs && cfg.fixoRefs.length){
+    tag.textContent = cfg.nome;
+    grid.innerHTML = '';
+    cfg.fixoRefs.forEach(item=>{
+      const btn = document.createElement('button');
+      btn.className = 'fixo-pick-btn';
+      btn.innerHTML = `
+        <div class="fixo-pick-ref">${h_(item.ref)}</div>
+        <div class="fixo-pick-qty">${item.qty} <span class="fixo-pick-lbl">peças</span></div>
+      `;
+      btn.onclick = ()=> fixoPickAdd(item, cfg.nome);
+      grid.appendChild(btn);
+    });
+    card.style.display = 'block';
+  } else {
+    card.style.display = 'none';
+  }
+}
+
+function fixoPickAdd(item, fornNome){
+  if(!session){ toast('Inicie uma sessão primeiro',true); return; }
+  addItem({
+    ref  : item.ref,
+    desc : '',
+    qty  : item.qty,
+    forn : fornNome || (session ? session.forn : ''),
+    raw  : 'fixo:'+item.ref,
+    time : new Date().toLocaleTimeString('pt-BR')
+  });
+  // Flash visual no botão
+  doFlash();
 }
 
 function _populateOcrFornSelect(currentForn){
@@ -2164,6 +2328,7 @@ function resetScanUI(){
   document.getElementById('card-cam').style.display    = 'none';
   document.getElementById('card-manual').style.display = 'none';
   document.getElementById('card-acoes').style.display  = 'none';
+  document.getElementById('card-fixo').style.display   = 'none';
   document.getElementById('qr-box').classList.remove('on');
   document.getElementById('lp-badge').style.display    = 'none';
   document.getElementById('inp-forn').value = '';
