@@ -1341,22 +1341,106 @@ textarea{resize:none;min-height:60px}
   </div>
 </div>
 
-<!-- MODAL EDITAR FORNECEDOR CADASTRADO -->
-<div class="mbg" id="mdl-forn-edit">
-  <div class="md" style="max-width:400px;max-height:88vh;overflow-y:auto">
-    <h3 id="mfe-title">Editar Fornecedor</h3>
-    <label>Nome</label>
-    <input id="mfe-nome" type="text" autocapitalize="characters">
-    <label>Tipo de Parser</label>
-    <select id="mfe-tipo" disabled style="opacity:.5"><!-- read-only display --></select>
-    <div id="mfe-info" style="font-size:.6rem;color:var(--mu2);line-height:1.8;
-      padding:8px 10px;background:var(--bg);border:1px solid var(--bd);border-radius:6px;margin-bottom:10px"></div>
-    <div class="mrow">
-      <button class="btn btn-x"  onclick="fornEditClose()">Cancelar</button>
-      <button class="btn btn-cy" onclick="fornEditSave()">Salvar Nome</button>
+<!-- MODAL EDITAR FORNECEDOR CADASTRADO (completo) -->
+<div class="mbg" id="mdl-forn-edit" style="align-items:flex-start;padding:0;overflow-y:auto">
+  <div class="md" style="max-width:480px;width:100%;margin:auto;border-radius:13px;padding:20px 18px 24px">
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <h3 style="margin-bottom:0" id="mfe-title">Editar Fornecedor</h3>
+      <button onclick="fornEditClose()" style="background:none;border:none;color:var(--mu2);font-size:1.1rem;cursor:pointer;line-height:1;padding:2px 4px">✕</button>
     </div>
-    <button class="btn btn-re" style="margin-top:8px;font-size:.72rem;padding:9px"
-      onclick="fornEditDelete()">Excluir Fornecedor</button>
+
+    <!-- Nome -->
+    <label>Nome do Fornecedor <span style="color:var(--re)">*</span></label>
+    <input id="mfe-nome" type="text" autocapitalize="characters" autocomplete="off" placeholder="Ex: ACME INDUSTRIA">
+
+    <!-- Tipo -->
+    <label>Tipo de Etiqueta / Parser</label>
+    <select id="mfe-tipo" onchange="mfeTypeChange()">
+      <option value="generico">Genérico (texto livre, pipe, JSON, chave-valor)</option>
+      <option value="regex">Regex Personalizado</option>
+      <option value="pipe">Pipe  REF|DESC|QTD|FORN</option>
+      <option value="kv">Chave-Valor  REF=x;QTD=10</option>
+      <option value="json">JSON  {"ref":"x","qty":10}</option>
+      <option value="posicional">Posicional (extrair por posição fixa)</option>
+    </select>
+
+    <!-- Seção Regex -->
+    <div id="mfe-fs-regex" style="display:none">
+      <div style="font-size:.56rem;color:var(--mu2);letter-spacing:.5px;margin-bottom:6px;line-height:1.7">
+        Use <b style="color:var(--cy)">grupo 1</b> <code style="color:var(--gr)">(...)</code> para capturar o valor.
+      </div>
+      <label>Regex Referência <span style="color:var(--re)">*</span></label>
+      <input id="mfe-ref-regex" type="text" placeholder="Ex: P([A-Z0-9]{4,15})" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+      <label>Regex Quantidade</label>
+      <input id="mfe-qty-regex" type="text" placeholder="Ex: Q\d{3}(\d{3})\d{3}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+      <div class="g2">
+        <div><label>Dividir Qtd por</label><input id="mfe-qty-div" type="number" value="1" min="1" placeholder="1"></div>
+        <div><label>Prefixo Ref (remover)</label><input id="mfe-ref-strip" type="text" placeholder="Ex: P" autocomplete="off"></div>
+      </div>
+    </div>
+
+    <!-- Seção Pipe -->
+    <div id="mfe-fs-pipe" style="display:none">
+      <div style="font-size:.56rem;color:var(--mu2);letter-spacing:.5px;margin-bottom:6px;line-height:1.7">
+        Formato: <code style="color:var(--gr)">campo1|campo2|campo3</code> — índice base 0.
+      </div>
+      <div class="g3">
+        <div><label>Índice Ref</label><input id="mfe-pipe-ref" type="number" value="0" min="0"></div>
+        <div><label>Índice Qtd</label><input id="mfe-pipe-qty" type="number" value="2" min="0"></div>
+        <div><label>Separador</label><input id="mfe-pipe-sep" type="text" value="|" maxlength="3" autocomplete="off"></div>
+      </div>
+      <label>Índice Descrição (opcional, -1 = ignorar)</label>
+      <input id="mfe-pipe-desc" type="number" value="1" min="-1">
+    </div>
+
+    <!-- Seção Chave-Valor -->
+    <div id="mfe-fs-kv" style="display:none">
+      <div style="font-size:.56rem;color:var(--mu2);letter-spacing:.5px;margin-bottom:6px;line-height:1.7">
+        Formato: <code style="color:var(--gr)">CHAVE=valor;CHAVE2=valor2</code>
+      </div>
+      <div class="g2">
+        <div><label>Chave da Referência</label><input id="mfe-kv-ref" type="text" value="REF" autocomplete="off"></div>
+        <div><label>Chave da Quantidade</label><input id="mfe-kv-qty" type="text" value="QTD" autocomplete="off"></div>
+      </div>
+      <div class="g2">
+        <div><label>Separador de pares</label><input id="mfe-kv-sep" type="text" value=";" maxlength="3" autocomplete="off"></div>
+        <div><label>Separador chave=val</label><input id="mfe-kv-eq" type="text" value="=" maxlength="3" autocomplete="off"></div>
+      </div>
+    </div>
+
+    <!-- Seção Posicional -->
+    <div id="mfe-fs-posicional" style="display:none">
+      <div style="font-size:.56rem;color:var(--mu2);letter-spacing:.5px;margin-bottom:6px;line-height:1.7">
+        Extrai por posição fixa. Posições começam em 0, fim exclusivo.
+      </div>
+      <div style="font-size:.58rem;color:var(--cy);margin-bottom:4px;font-family:var(--R);font-weight:700;letter-spacing:.5px">Referência</div>
+      <div class="g2">
+        <div><label>Início (pos)</label><input id="mfe-pos-ref-s" type="number" value="0" min="0"></div>
+        <div><label>Fim (pos)</label><input id="mfe-pos-ref-e" type="number" value="12" min="1"></div>
+      </div>
+      <div style="font-size:.58rem;color:var(--cy);margin-bottom:4px;font-family:var(--R);font-weight:700;letter-spacing:.5px">Quantidade</div>
+      <div class="g2">
+        <div><label>Início (pos)</label><input id="mfe-pos-qty-s" type="number" value="12" min="0"></div>
+        <div><label>Fim (pos)</label><input id="mfe-pos-qty-e" type="number" value="17" min="1"></div>
+      </div>
+      <label>Dividir Qtd por</label>
+      <input id="mfe-pos-div" type="number" value="1" min="1">
+    </div>
+
+    <!-- Testar parser -->
+    <label style="margin-top:4px">Testar Parser — cole um exemplo</label>
+    <textarea id="mfe-test-raw" placeholder="Cole aqui um QR Code ou código de exemplo..." style="min-height:60px;margin-bottom:6px"></textarea>
+    <button class="btn btn-x" onclick="mfeTestParser()" style="font-size:.72rem;padding:8px;margin-bottom:10px">▶ Testar Extração</button>
+    <div id="mfe-test-box" style="display:none;padding:9px 11px;border-radius:7px;font-size:.6rem;line-height:1.9;margin-bottom:10px"></div>
+
+    <div style="height:1px;background:var(--bd);margin-bottom:12px"></div>
+
+    <div class="row" style="margin-bottom:8px">
+      <button class="btn btn-x"  onclick="fornEditClose()">Cancelar</button>
+      <button class="btn btn-gr" onclick="fornEditSave()">💾 Salvar Alterações</button>
+    </div>
+    <button class="btn btn-re" style="font-size:.72rem;padding:9px" onclick="fornEditDelete()">Excluir Fornecedor</button>
   </div>
 </div>
 
@@ -1816,36 +1900,166 @@ function _fornSummary(f){
   return 'Formatos automáticos: JSON, Pipe, Chave-Valor, texto livre';
 }
 
-/* ── Editar nome de fornecedor ── */
+/* ── Editar fornecedor (modal completo) ── */
 let _fornEditNome = null;
+
+function mfeTypeChange(){
+  const tipo = document.getElementById('mfe-tipo').value;
+  ['regex','pipe','kv','posicional'].forEach(t=>{
+    const el = document.getElementById('mfe-fs-'+t);
+    if(el) el.style.display = tipo===t ? 'block' : 'none';
+  });
+  // limpar resultado de teste ao mudar tipo
+  const tb = document.getElementById('mfe-test-box');
+  if(tb){ tb.style.display='none'; tb.className=''; }
+}
+
 function fornEditOpen(nome){
   _fornEditNome = nome;
   const f = fornLoad().find(x=>x.nome===nome);
   if(!f) return;
-  const tipoLabel={generico:'Genérico',regex:'Regex',pipe:'Pipe',kv:'Chave-Valor',json:'JSON',posicional:'Posicional'};
+
   document.getElementById('mfe-title').textContent = nome;
-  document.getElementById('mfe-nome').value = nome;
-  const sel = document.getElementById('mfe-tipo');
-  sel.innerHTML = `<option>${tipoLabel[f.tipo]||f.tipo}</option>`;
-  document.getElementById('mfe-info').innerHTML = _fornSummary(f);
+  document.getElementById('mfe-nome').value  = nome;
+  document.getElementById('mfe-tipo').value  = f.tipo || 'generico';
+  mfeTypeChange();
+
+  // Preencher campos de cada tipo
+  if(f.tipo==='regex'){
+    document.getElementById('mfe-ref-regex').value = f.refRegex || '';
+    document.getElementById('mfe-qty-regex').value = f.qtyRegex || '';
+    document.getElementById('mfe-qty-div').value   = f.qtyDiv   || 1;
+    document.getElementById('mfe-ref-strip').value = f.refStrip || '';
+  } else if(f.tipo==='pipe'){
+    document.getElementById('mfe-pipe-ref').value  = f.pipeRef  ?? 0;
+    document.getElementById('mfe-pipe-qty').value  = f.pipeQty  ?? 2;
+    document.getElementById('mfe-pipe-sep').value  = f.pipeSep  || '|';
+    document.getElementById('mfe-pipe-desc').value = f.pipeDesc ?? 1;
+  } else if(f.tipo==='kv'){
+    document.getElementById('mfe-kv-ref').value = f.kvRef || 'REF';
+    document.getElementById('mfe-kv-qty').value = f.kvQty || 'QTD';
+    document.getElementById('mfe-kv-sep').value = f.kvSep || ';';
+    document.getElementById('mfe-kv-eq').value  = f.kvEq  || '=';
+  } else if(f.tipo==='posicional'){
+    document.getElementById('mfe-pos-ref-s').value = f.posRefS ?? 0;
+    document.getElementById('mfe-pos-ref-e').value = f.posRefE ?? 12;
+    document.getElementById('mfe-pos-qty-s').value = f.posQtyS ?? 12;
+    document.getElementById('mfe-pos-qty-e').value = f.posQtyE ?? 17;
+    document.getElementById('mfe-pos-div').value   = f.posDiv  || 1;
+  }
+
+  // Limpar campo de teste
+  document.getElementById('mfe-test-raw').value = '';
+  const tb = document.getElementById('mfe-test-box');
+  if(tb){ tb.style.display='none'; }
+
   document.getElementById('mdl-forn-edit').classList.add('on');
 }
+
 function fornEditClose(){
   document.getElementById('mdl-forn-edit').classList.remove('on');
-  _fornEditNome=null;
+  _fornEditNome = null;
 }
+
+function mfeTestParser(){
+  const raw  = document.getElementById('mfe-test-raw').value.trim();
+  const box  = document.getElementById('mfe-test-box');
+  if(!raw){ toast('Cole um código de exemplo primeiro',true); return; }
+
+  const tipo = document.getElementById('mfe-tipo').value;
+  const nome = document.getElementById('mfe-nome').value.trim().toUpperCase()||'TESTE';
+  const cfg  = { nome, tipo };
+
+  if(tipo==='regex'){
+    cfg.refRegex = document.getElementById('mfe-ref-regex').value.trim();
+    cfg.qtyRegex = document.getElementById('mfe-qty-regex').value.trim();
+    cfg.qtyDiv   = Math.max(1, parseInt(document.getElementById('mfe-qty-div').value)||1);
+    cfg.refStrip = document.getElementById('mfe-ref-strip').value;
+  } else if(tipo==='pipe'){
+    cfg.pipeRef  = parseInt(document.getElementById('mfe-pipe-ref').value)||0;
+    cfg.pipeQty  = parseInt(document.getElementById('mfe-pipe-qty').value)||2;
+    cfg.pipeSep  = document.getElementById('mfe-pipe-sep').value||'|';
+    cfg.pipeDesc = parseInt(document.getElementById('mfe-pipe-desc').value);
+  } else if(tipo==='kv'){
+    cfg.kvRef = document.getElementById('mfe-kv-ref').value.trim()||'REF';
+    cfg.kvQty = document.getElementById('mfe-kv-qty').value.trim()||'QTD';
+    cfg.kvSep = document.getElementById('mfe-kv-sep').value||';';
+    cfg.kvEq  = document.getElementById('mfe-kv-eq').value||'=';
+  } else if(tipo==='posicional'){
+    cfg.posRefS = parseInt(document.getElementById('mfe-pos-ref-s').value)||0;
+    cfg.posRefE = parseInt(document.getElementById('mfe-pos-ref-e').value)||12;
+    cfg.posQtyS = parseInt(document.getElementById('mfe-pos-qty-s').value)||12;
+    cfg.posQtyE = parseInt(document.getElementById('mfe-pos-qty-e').value)||17;
+    cfg.posDiv  = Math.max(1, parseInt(document.getElementById('mfe-pos-div').value)||1);
+  }
+
+  let result = null;
+  if(tipo==='generico'||tipo==='json'){
+    result = parseGeneric(raw);
+  } else {
+    result = parseCustomForn(raw, cfg);
+    if(!result && tipo==='generico') result = parseGeneric(raw);
+  }
+
+  box.style.display='block';
+  if(result && result.ref){
+    box.style.cssText='display:block;padding:9px 11px;border-radius:7px;font-size:.6rem;line-height:1.9;margin-bottom:10px;border:1px solid var(--gr);background:rgba(0,245,160,.05);color:var(--mu2)';
+    box.innerHTML=`<b style="color:var(--gr)">✓ Extração bem-sucedida</b><br>`+
+      `Referência: <span style="color:var(--gr)">${h(result.ref)}</span><br>`+
+      `Quantidade: <span style="color:var(--gr)">${result.qty} pç</span>`+
+      (result.desc?`<br>Descrição: <span style="color:var(--gr)">${h(result.desc)}</span>`:'');
+  } else {
+    box.style.cssText='display:block;padding:9px 11px;border-radius:7px;font-size:.6rem;line-height:1.9;margin-bottom:10px;border:1px solid var(--re);background:rgba(255,51,85,.05);color:var(--re)';
+    box.innerHTML='✗ Nenhuma extração possível com este padrão.<br>Verifique os campos e tente novamente.';
+  }
+}
+
 function fornEditSave(){
   const newNome = document.getElementById('mfe-nome').value.trim().toUpperCase();
   if(!newNome){ toast('Nome inválido',true); return; }
-  if(['LINKPLAS','SPI'].includes(newNome)){ toast('Nome reservado',true); return; }
+  if(['LINKPLAS','SPI'].includes(newNome) && newNome !== _fornEditNome){
+    toast('Nome reservado — escolha outro',true); return;
+  }
+
+  const tipo = document.getElementById('mfe-tipo').value;
+  const cfg  = { nome: newNome, tipo };
+
+  if(tipo==='regex'){
+    const refR = document.getElementById('mfe-ref-regex').value.trim();
+    if(!refR){ toast('Informe o Regex da Referência',true); return; }
+    try{ new RegExp(refR); }catch(e){ toast('Regex da Referência inválido: '+e.message,true); return; }
+    const qtyR = document.getElementById('mfe-qty-regex').value.trim();
+    if(qtyR){ try{ new RegExp(qtyR); }catch(e){ toast('Regex da Quantidade inválido: '+e.message,true); return; } }
+    cfg.refRegex = refR;
+    cfg.qtyRegex = qtyR;
+    cfg.qtyDiv   = Math.max(1, parseInt(document.getElementById('mfe-qty-div').value)||1);
+    cfg.refStrip = document.getElementById('mfe-ref-strip').value;
+  } else if(tipo==='pipe'){
+    cfg.pipeRef  = parseInt(document.getElementById('mfe-pipe-ref').value)||0;
+    cfg.pipeQty  = parseInt(document.getElementById('mfe-pipe-qty').value)||2;
+    cfg.pipeSep  = document.getElementById('mfe-pipe-sep').value||'|';
+    cfg.pipeDesc = parseInt(document.getElementById('mfe-pipe-desc').value);
+  } else if(tipo==='kv'){
+    cfg.kvRef = document.getElementById('mfe-kv-ref').value.trim()||'REF';
+    cfg.kvQty = document.getElementById('mfe-kv-qty').value.trim()||'QTD';
+    cfg.kvSep = document.getElementById('mfe-kv-sep').value||';';
+    cfg.kvEq  = document.getElementById('mfe-kv-eq').value||'=';
+  } else if(tipo==='posicional'){
+    cfg.posRefS = parseInt(document.getElementById('mfe-pos-ref-s').value)||0;
+    cfg.posRefE = parseInt(document.getElementById('mfe-pos-ref-e').value)||12;
+    cfg.posQtyS = parseInt(document.getElementById('mfe-pos-qty-s').value)||12;
+    cfg.posQtyE = parseInt(document.getElementById('mfe-pos-qty-e').value)||17;
+    cfg.posDiv  = Math.max(1, parseInt(document.getElementById('mfe-pos-div').value)||1);
+  }
+
   const arr = fornLoad();
   const idx = arr.findIndex(f=>f.nome===_fornEditNome);
-  if(idx<0){ toast('Fornecedor não encontrado',true); return; }
-  arr[idx].nome = newNome;
+  if(idx < 0){ toast('Fornecedor não encontrado',true); return; }
+  arr[idx] = cfg;
   fornSaveAll(arr);
   fornEditClose();
   renderFornList();
-  toast('Nome atualizado');
+  toast(newNome+' atualizado');
 }
 function fornEditDelete(){
   if(!_fornEditNome) return;
