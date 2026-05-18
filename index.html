@@ -2747,13 +2747,22 @@ async function ocrCapture(silent=false){
                   || data.responses?.[0]?.textAnnotations?.[0]?.description
                   || '';
 
-    const rawBox = document.getElementById('ocr-raw-box');
-    rawBox.textContent = fullText.trim().slice(0, 300);
-    rawBox.classList.add('on');
-
     // Determinar fornecedor selecionado no OCR
     const ocrFornSel = document.getElementById('ocr-forn-select');
     const ocrForn = (ocrFornSel ? ocrFornSel.value.trim() : '') || 'SPI';
+
+    // Buscar config do fornecedor uma vez só
+    const customCfg = ocrForn !== 'SPI' ? fornFindByName(ocrForn) : null;
+    const dbgRefs = (customCfg && customCfg.fixoRefs) ? customCfg.fixoRefs.map(r=>r.ref).join(', ') : '—';
+
+    // Debug visível: mostra o que foi lido e o que se espera
+    const rawBox = document.getElementById('ocr-raw-box');
+    rawBox.innerHTML =
+      '<b style="color:var(--cy)">Forn OCR:</b> ' + h_(ocrForn) +
+      ' · <b style="color:var(--cy)">Tipo:</b> ' + h_(customCfg ? customCfg.tipo : 'SPI') + '<br>' +
+      '<b style="color:var(--cy)">Refs fixas:</b> ' + h_(dbgRefs) + '<br>' +
+      '<b style="color:var(--mu2)">Texto lido:</b><br>' + h_(fullText.trim().slice(0, 300));
+    rawBox.classList.add('on');
 
     // Executar o parser correto
     let ocrParsed = null;
@@ -2761,13 +2770,16 @@ async function ocrCapture(silent=false){
       const spiRes = parseSPI(fullText);
       if(spiRes) ocrParsed = { ref: spiRes.ref, qty: spiRes.qty, forn: 'SPI' };
     } else {
-      const customCfg = fornFindByName(ocrForn);
       if(customCfg && customCfg.tipo === 'fixo'){
         // Para tipo fixo: procura qualquer referência cadastrada no texto do OCR
-        const textUp = fullText.toUpperCase().replace(/\s+/g,' ');
+        // Remove espaços e compara linha a linha também (OCR pode inserir quebras no meio da ref)
+        const textUp  = fullText.toUpperCase();
+        const flatUp  = textUp.replace(/\s+/g, '');
         const fixoRefs = customCfg.fixoRefs || [];
         for(const item of fixoRefs){
-          if(textUp.includes(item.ref.toUpperCase())){
+          const refUp = item.ref.toUpperCase();
+          const refFlat = refUp.replace(/\s+/g, '');
+          if(textUp.includes(refUp) || flatUp.includes(refFlat)){
             ocrParsed = { ref: item.ref, qty: item.qty, forn: ocrForn };
             break;
           }
