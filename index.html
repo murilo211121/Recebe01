@@ -313,6 +313,9 @@ textarea{resize:none;min-height:60px}
 .hic-edit input{margin-bottom:0;padding:7px 10px;font-size:.82rem;flex:1}
 .hic-edit .btn{padding:8px 12px;font-size:.72rem;width:auto;margin-bottom:0;letter-spacing:1px}
 
+/* ══ SCAN LIST COLLAPSE ══ */
+#scan-list-body.collapsed{display:none}
+
 /* QR manual input */
 .qr-manual{background:rgba(0,216,255,.04);border:1px solid rgba(0,216,255,.15);
   border-radius:8px;padding:10px 12px;margin-bottom:8px}
@@ -695,15 +698,15 @@ textarea{resize:none;min-height:60px}
         <div class="dbtn-lbl" id="dbtn-scan-lbl">Iniciar Contagem</div>
         <div class="dbtn-sub" id="dbtn-scan-sub">Escanear etiquetas</div>
       </div>
-      <div class="dbtn gr" onclick="navTo('pg-lista')">
+      <div class="dbtn gr" onclick="navTo('pg-hist')">
         <div class="dbtn-ico">&#9783;</div>
         <div class="dbtn-lbl">Contagens</div>
-        <div class="dbtn-sub" id="db-lista-sub">Sessão atual</div>
-      </div>
-      <div class="dbtn wa" onclick="navTo('pg-hist')">
-        <div class="dbtn-ico">&#9636;</div>
-        <div class="dbtn-lbl">Histórico</div>
         <div class="dbtn-sub" id="db-hist-sub">Contagens salvas</div>
+      </div>
+      <div class="dbtn wa" onclick="dashExport()">
+        <div class="dbtn-ico">&#8681;</div>
+        <div class="dbtn-lbl">Exportar</div>
+        <div class="dbtn-sub" id="db-lista-sub">CSV da sessão atual</div>
       </div>
       <div class="dbtn re" onclick="navTo('pg-forn')">
         <div class="dbtn-ico">&#9776;</div>
@@ -893,6 +896,27 @@ textarea{resize:none;min-height:60px}
         onclick="mc('Encerrar Sessão','A sessão será encerrada sem salvar. Os dados atuais serão perdidos.',sessCancel)">
         Descartar Sessão
       </button>
+    </div>
+
+    <!-- Lista de itens bipados na tela de leitura -->
+    <div id="card-scan-list" style="display:none">
+      <div class="sep"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-family:var(--R);font-weight:700;font-size:.65rem;letter-spacing:2px;text-transform:uppercase;color:var(--cy)">
+          Itens Bipados
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div id="scan-list-count" style="font-size:.55rem;color:var(--mu2)"></div>
+          <button style="background:none;border:none;color:var(--cy);font-family:var(--R);
+            font-size:.6rem;letter-spacing:1px;cursor:pointer;padding:2px 0"
+            onclick="toggleScanList()">
+            <span id="scan-list-toggle-lbl">▲ Ocultar</span>
+          </button>
+        </div>
+      </div>
+      <div id="scan-list-body">
+        <div class="ilist" id="scan-ilist"></div>
+      </div>
     </div>
 
   </div>
@@ -1622,6 +1646,7 @@ function navTo(id){
     _applyFornBadges(session.forn);
     document.getElementById('sess-tag').textContent      = session.forn.toUpperCase();
     document.getElementById('m-forn').value              = session.forn;
+    renderScanList();
   }
 }
 
@@ -1656,7 +1681,7 @@ function updateDash(){
   document.getElementById('d-hist').textContent = hist;
   document.getElementById('db-hist-sub').textContent = hist + ' contagen' + (hist!==1?'s':'');
   document.getElementById('db-lista-sub').textContent = session
-    ? (refs + ' ref' + (refs!==1?'s':'') + ' · ' + cxas + ' pç')
+    ? (refs + ' ref' + (refs!==1?'s':'') + ' · ' + cxas + ' pç — toque para baixar')
     : 'Sem sessão ativa';
 
   const dot  = document.getElementById('sdot');
@@ -2285,6 +2310,7 @@ function sessStart(){
   document.getElementById('m-forn').value = forn;
   sessStateSave();
   updateDash();
+  renderScanList();
   toast('Sessão iniciada');
 }
 
@@ -2329,6 +2355,7 @@ function resetScanUI(){
   document.getElementById('card-manual').style.display = 'none';
   document.getElementById('card-acoes').style.display  = 'none';
   document.getElementById('card-fixo').style.display   = 'none';
+  document.getElementById('card-scan-list').style.display = 'none';
   document.getElementById('qr-box').classList.remove('on');
   document.getElementById('lp-badge').style.display    = 'none';
   document.getElementById('inp-forn').value = '';
@@ -2812,6 +2839,7 @@ async function ocrCapture(silent=false){
       _ocrCountdownStop();
       setSt('Etiqueta lida — confirme ou cancele','ok');
       if(!silent) toast(`${ocrParsed.forn}: ${ocrParsed.ref} · ${ocrParsed.qty} pç`);
+      doBip();
       doFlash();
     } else {
       const hasText = fullText.trim().length > 5;
@@ -3046,6 +3074,7 @@ function handleQR(raw){
     }
   }
   pending={...parsed,raw,time:new Date().toLocaleTimeString('pt-BR')};
+  doBip();
   showResult(pending);
 }
 
@@ -3144,6 +3173,7 @@ function addItem(item){
   toast(g.scans>1
     ? `${item.ref}  +${item.qty} pç${volInfo}  →  Total: ${g.qty} pç`
     : `${item.ref}  ·  ${item.qty} pç${volInfo}`);
+  renderScanList();
 }
 
 function manualAdd(){
@@ -3159,7 +3189,93 @@ function manualAdd(){
 }
 
 function listaClear(){
-  items=[];grouped={};sessStateSave();updateDash();renderList();toast('Lista limpa');
+  items=[];grouped={};sessStateSave();updateDash();renderList();renderScanList();toast('Lista limpa');
+}
+
+/* ═══════════════════════════════════════════════
+   LISTA DE ITENS NA TELA DE SCAN
+═══════════════════════════════════════════════ */
+let _scanListVisible = true;
+
+function toggleScanList(){
+  _scanListVisible = !_scanListVisible;
+  const body = document.getElementById('scan-list-body');
+  const lbl  = document.getElementById('scan-list-toggle-lbl');
+  if(body) body.classList.toggle('collapsed', !_scanListVisible);
+  if(lbl)  lbl.textContent = _scanListVisible ? '▲ Ocultar' : '▼ Mostrar';
+}
+
+function renderScanList(){
+  const card = document.getElementById('card-scan-list');
+  const el   = document.getElementById('scan-ilist');
+  const cnt  = document.getElementById('scan-list-count');
+  if(!card||!el) return;
+
+  const rows = Object.values(grouped).sort((a,b)=>(b.lastTs||0)-(a.lastTs||0));
+
+  if(!session || !rows.length){
+    card.style.display='none';
+    return;
+  }
+
+  card.style.display='block';
+
+  const tot = rows.reduce((s,r)=>s+r.qty,0);
+  if(cnt) cnt.textContent = rows.length + ' ref · ' + tot + ' pç';
+
+  el.innerHTML='';
+  rows.forEach(r=>{
+    const div=document.createElement('div');
+    div.className='ic'+(r.scans>1?' multi':'');
+    div.style.cssText='animation:none';
+
+    const info=document.createElement('div');
+    info.style.cssText='flex:1;min-width:0';
+
+    const ref=document.createElement('div');
+    ref.className='iref'; ref.textContent=r.ref;
+
+    const meta=document.createElement('div');
+    meta.className='imeta';
+    meta.textContent=(r.forn||'');
+    if(r.scans>1){
+      const tag=document.createElement('span');
+      tag.className='itag'; tag.textContent=r.scans+' leituras';
+      meta.append(' · ', tag);
+    }
+    info.append(ref, meta);
+
+    const qty=document.createElement('div');
+    qty.className='iqty'; qty.textContent=r.qty;
+
+    // Botão editar
+    const editBtn=document.createElement('button');
+    editBtn.className='idel';
+    editBtn.textContent='✎';
+    editBtn.style.cssText='color:var(--cy);font-size:.9rem';
+    editBtn.setAttribute('aria-label','Editar '+r.ref);
+    editBtn.onclick=()=>openEdit(r.ref);
+
+    // Botão excluir
+    const del=document.createElement('button');
+    del.className='idel'; del.textContent='✕';
+    del.setAttribute('aria-label','Remover '+r.ref);
+    del.onclick=()=>deleteScanRef(r.ref);
+
+    div.append(info, qty, editBtn, del);
+    el.appendChild(div);
+  });
+}
+
+function deleteScanRef(ref){
+  mc(`Remover "${ref}"`,`Todos os registros desta referência serão removidos.`,()=>{
+    items=items.filter(i=>i.ref!==ref);
+    delete grouped[ref];
+    sessStateSave();
+    updateDash();
+    renderScanList();
+    renderList();
+  });
 }
 
 function processManualQR(){
@@ -3202,6 +3318,7 @@ function editSave(){
   sessStateSave();
   editClose();
   renderList();
+  renderScanList();
   updateDash();
   toast('Item atualizado');
 }
@@ -3594,6 +3711,56 @@ function doFlash(){
   const f=document.getElementById('flash');
   f.classList.add('on');setTimeout(()=>f.classList.remove('on'),140);
 }
+
+/* ═══════════════════════════════════════════════
+   BIP SONORO + VIBRAÇÃO AO ESCANEAR
+═══════════════════════════════════════════════ */
+let _audioCtx = null;
+function _getAudioCtx(){
+  if(!_audioCtx){
+    try{ _audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){}
+  }
+  // Resumir se suspenso (política autoplay)
+  if(_audioCtx && _audioCtx.state === 'suspended'){
+    _audioCtx.resume().catch(()=>{});
+  }
+  return _audioCtx;
+}
+
+function doBip(){
+  // Vibração (Android/alguns iOS)
+  try{
+    if(navigator.vibrate){ navigator.vibrate([60]); }
+  }catch(e){}
+
+  // Bip sonoro via Web Audio API
+  try{
+    const ctx = _getAudioCtx();
+    if(!ctx) return;
+    const osc  = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(1800, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(900, ctx.currentTime + 0.08);
+    gain.gain.setValueAtTime(0.18, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.12);
+  }catch(e){}
+}
+
+/* ═══════════════════════════════════════════════
+   EXPORTAR DO DASHBOARD (botão rápido)
+═══════════════════════════════════════════════ */
+function dashExport(){
+  if(!session || !Object.keys(grouped).length){
+    toast('Nenhuma sessão ativa para exportar', true);
+    return;
+  }
+  exportSessAtiva();
+}
 function h(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 const e=h;
 function ea(s){return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");}
@@ -3602,6 +3769,15 @@ function ea(s){return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");}
    INIT
 ═══════════════════════════════════════════════ */
 sessStateLoad();
+// Inicializar AudioContext no primeiro toque do usuário (requisito de autoplay)
+document.addEventListener('touchstart', function _initAudio(){
+  _getAudioCtx();
+  document.removeEventListener('touchstart', _initAudio);
+}, {once: true, passive: true});
+document.addEventListener('click', function _initAudioClick(){
+  _getAudioCtx();
+  document.removeEventListener('click', _initAudioClick);
+}, {once: true});
 if(session){
   document.getElementById('card-sess').style.display   = 'none';
   document.getElementById('card-cam').style.display    = 'block';
