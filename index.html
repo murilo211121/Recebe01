@@ -2762,7 +2762,21 @@ async function ocrCapture(silent=false){
       if(spiRes) ocrParsed = { ref: spiRes.ref, qty: spiRes.qty, forn: 'SPI' };
     } else {
       const customCfg = fornFindByName(ocrForn);
-      if(customCfg && customCfg.tipo !== 'generico'){
+      if(customCfg && customCfg.tipo === 'fixo'){
+        // Para tipo fixo: procura qualquer referência cadastrada no texto do OCR
+        const textUp = fullText.toUpperCase().replace(/\s+/g,' ');
+        const fixoRefs = customCfg.fixoRefs || [];
+        for(const item of fixoRefs){
+          if(textUp.includes(item.ref.toUpperCase())){
+            ocrParsed = { ref: item.ref, qty: item.qty, forn: ocrForn };
+            break;
+          }
+        }
+        if(!ocrParsed && !silent){
+          const listedRefs = fixoRefs.map(r=>r.ref).join(', ');
+          setSt('Nenhuma ref encontrada. Esperadas: '+listedRefs,'err');
+        }
+      } else if(customCfg && customCfg.tipo !== 'generico'){
         // Tenta o texto completo e cada linha individualmente
         const candidates = [fullText, ...fullText.split('\n').map(l=>l.trim()).filter(Boolean)];
         for(const seg of candidates){
@@ -2770,8 +2784,8 @@ async function ocrCapture(silent=false){
           if(c && c.ref){ ocrParsed = { ref: c.ref, qty: c.qty, forn: ocrForn }; break; }
         }
       }
-      // Fallback genérico
-      if(!ocrParsed){
+      // Fallback generico (so para nao-fixo)
+      if(!ocrParsed && (!customCfg || customCfg.tipo !== 'fixo')){
         const g = parseGeneric(fullText);
         if(g && g.ref && g.ref !== fullText.trim()) ocrParsed = { ref: g.ref, qty: g.qty, forn: ocrForn };
       }
@@ -2789,11 +2803,22 @@ async function ocrCapture(silent=false){
       doFlash();
     } else {
       const hasText = fullText.trim().length > 5;
+      // Mensagem específica por tipo
+      const customCfg2 = fornFindByName(ocrForn);
+      let waitMsg = hasText ? `⟳ Aguardando padrão ${ocrForn}…` : '⟳ Aguardando etiqueta…';
+      if(customCfg2 && customCfg2.tipo === 'fixo' && hasText){
+        waitMsg = `⟳ Texto lido, ref não encontrada…`;
+      }
       if(!silent){
-        setSt(`Padrão "${ocrForn}" não detectado — centralize a etiqueta`,'err');
-        toast('Centralize a etiqueta e tente novamente',true);
+        if(customCfg2 && customCfg2.tipo === 'fixo'){
+          // já setou mensagem específica acima; só mostrar toast se ainda não setou
+          toast('Referência não encontrada na etiqueta',true);
+        } else {
+          setSt(`Padrão "${ocrForn}" não detectado — centralize a etiqueta`,'err');
+          toast('Centralize a etiqueta e tente novamente',true);
+        }
       } else {
-        setSt(hasText?`⟳ Aguardando padrão ${ocrForn}…`:'⟳ Aguardando etiqueta…','wa');
+        setSt(waitMsg,'wa');
       }
     }
   }catch(e){
