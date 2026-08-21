@@ -6,6 +6,7 @@
 <title>Notas com Erro</title>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root{
@@ -56,6 +57,28 @@ header.app-header p{ color: var(--text-mute); margin-top: 4px; font-size: 0.9rem
   padding: 40px 20px; text-align: center; color: var(--text-mute); font-size: 0.9rem;
 }
 
+/* ===================== LOGIN ===================== */
+#loginScreen{
+  position: fixed; inset: 0; z-index: 999;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg); padding: 20px;
+}
+#loginScreen.hidden{ display: none; }
+.login-card{
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 32px 28px; width: 100%; max-width: 380px;
+  box-shadow: 0 4px 24px rgba(0,0,0,.06);
+}
+.login-card h1{ font-size: 1.2rem; font-weight: 700; color: var(--primary-dark); text-align: center; margin-bottom: 4px; }
+.login-card p.login-sub{ color: var(--text-mute); font-size: 0.85rem; text-align: center; margin-bottom: 22px; }
+.login-card label{ display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-mute); margin-bottom: 5px; margin-top: 14px; }
+.login-card label:first-of-type{ margin-top: 0; }
+.login-card input{ width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 7px; font-size: 0.9rem; }
+.login-card input:focus{ outline: 2px solid #a9cbe4; border-color: var(--primary); }
+.login-card button[type="submit"]{ width: 100%; margin-top: 20px; padding: 11px; font-size: 0.92rem; }
+#loginError{ display: none; margin-top: 14px; padding: 10px 12px; border-radius: 7px; background: #fdf1ee; color: var(--danger); border: 1px solid #f2d3c9; font-size: 0.82rem; }
+#loginError.visible{ display: block; }
+
 .card-list{ display: flex; flex-direction: column; gap: 12px; }
 .card{
   background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
@@ -85,11 +108,31 @@ footer.app-footer{ text-align: center; color: var(--text-mute); font-size: 0.76r
 </style>
 </head>
 <body>
-<div class="container">
 
-  <header class="app-header">
+<!-- ===================== LOGIN ===================== -->
+<div id="loginScreen">
+  <div class="login-card">
     <h1>Notas com Erro</h1>
-    <p>PDFs de NF-e que não puderam ser processados automaticamente — revise e corrija por aqui.</p>
+    <p class="login-sub">Faça login para acessar</p>
+    <form id="loginForm">
+      <label for="loginEmail">E-mail</label>
+      <input type="email" id="loginEmail" autocomplete="username" required>
+      <label for="loginPassword">Senha</label>
+      <input type="password" id="loginPassword" autocomplete="current-password" required>
+      <button type="submit" class="btn-primary">Entrar</button>
+    </form>
+    <div id="loginError"></div>
+  </div>
+</div>
+
+<div class="container" id="appContainer" style="display:none;">
+
+  <header class="app-header" style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+    <div>
+      <h1>Notas com Erro</h1>
+      <p>PDFs de NF-e que não puderam ser processados automaticamente — revise e corrija por aqui.</p>
+    </div>
+    <button class="btn-danger" id="btnLogout" type="button" style="flex-shrink:0;">Sair</button>
   </header>
 
   <div class="summary-bar">
@@ -141,8 +184,43 @@ function init(){
   try{
     firebase.initializeApp(firebaseConfig);
     db = firebase.firestore();
-    setConnStatus(true, "Conectado");
-    escutarNotas();
+    const auth = firebase.auth();
+
+    auth.onAuthStateChanged((user) => {
+      if (user){
+        document.getElementById("loginScreen").classList.add("hidden");
+        document.getElementById("appContainer").style.display = "block";
+        setConnStatus(true, user.email || "Conectado");
+        escutarNotas();
+      } else {
+        document.getElementById("appContainer").style.display = "none";
+        document.getElementById("loginScreen").classList.remove("hidden");
+      }
+    });
+
+    document.getElementById("loginForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = document.getElementById("loginEmail").value.trim();
+      const senha = document.getElementById("loginPassword").value;
+      const erroEl = document.getElementById("loginError");
+      erroEl.classList.remove("visible");
+      try{
+        await auth.signInWithEmailAndPassword(email, senha);
+      } catch (err){
+        console.error(err);
+        const mensagens = {
+          "auth/invalid-email": "E-mail inválido.",
+          "auth/user-not-found": "Usuário não encontrado.",
+          "auth/wrong-password": "Senha incorreta.",
+          "auth/invalid-credential": "E-mail ou senha incorretos.",
+          "auth/too-many-requests": "Muitas tentativas — aguarde um pouco e tente de novo.",
+        };
+        erroEl.textContent = mensagens[err.code] || "Não foi possível entrar. Tente novamente.";
+        erroEl.classList.add("visible");
+      }
+    });
+
+    document.getElementById("btnLogout").addEventListener("click", () => auth.signOut());
   } catch (err){
     console.error(err);
     showError("Não foi possível conectar ao Firebase.");
@@ -158,18 +236,27 @@ function setConnStatus(ok, texto){
 
 /* =====================================================================
    ESCUTA EM TEMPO REAL DA COLEÇÃO "notas_com_erro"
+   Só traz as notas ENVIADAS PELO PRÓPRIO USUÁRIO logado — isola os
+   dados entre diferentes empresas/clientes que usem a mesma ferramenta.
    ===================================================================== */
+let notasUnsub = null;
 function escutarNotas(){
-  db.collection(COLECAO).orderBy("criadoEm", "desc").onSnapshot(
-    (snapshot) => {
-      const notas = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      renderNotas(notas);
-    },
-    (err) => {
-      console.error(err);
-      showError("Não foi possível carregar as notas com erro. Verifique as regras de acesso do Firestore.");
-    }
-  );
+  const usuario = firebase.auth().currentUser;
+  if (!usuario) return;
+  if (typeof notasUnsub === "function"){ notasUnsub(); notasUnsub = null; }
+  notasUnsub = db.collection(COLECAO)
+    .where("criadoPorUid", "==", usuario.uid)
+    .orderBy("criadoEm", "desc")
+    .onSnapshot(
+      (snapshot) => {
+        const notas = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        renderNotas(notas);
+      },
+      (err) => {
+        console.error(err);
+        showError("Não foi possível carregar as notas com erro. Verifique as regras de acesso do Firestore.");
+      }
+    );
 }
 
 let notasAtual = [];
